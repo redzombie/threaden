@@ -53,6 +53,48 @@ struct Lock
   }
 } ;
 
+// An integer counter primitive that provides LOCKING
+// increment and decrement operations
+struct LockCounter
+{
+private:
+  int num ;
+  pthread_mutex_t mutex ;
+
+public:
+  LockCounter() : num(0) {
+    pthread_mutex_init( &mutex, 0 ) ;
+  }
+  int read() { // aka getValue
+    Lock numLock( &mutex ) ;
+    return num ;
+  }
+  int write( int val ) { // aka setValue
+    Lock numLock( &mutex ) ;
+    return num=val ;
+  }
+  // Preincrement.
+  int operator++() {
+    Lock numLock( &mutex ) ;
+    return ++num ;
+  }
+  // Predecrement.
+  int operator--() {
+    Lock numLock( &mutex ) ;
+    return --num ;
+  }
+  // Postincrement
+  int operator++( int ) {
+    Lock numLock( &mutex ) ;
+    return num++ ;
+  }
+  // Postdecrement
+  int operator--( int ) {
+    Lock numLock( &mutex ) ;
+    return num-- ;
+  }
+} ;
+
 int getNumberOfCores() ;
 
 // This is where newly spawned threads LIVE.
@@ -102,9 +144,8 @@ private:
     // with the pthread_create call.  So from the pthread_create() call, THERE ARE 2 THREADS OF EXECUTION.
     // My only way to CONTROL the other thread of execution is to tell it, VIA system calls BY ITS THREAD ID
     //pthread_create( pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg ) ;
-    //pthread_create_suspended_np(<#pthread_t *#>, <#const pthread_attr_t *#>, <#void *(*)(void *)#>, <#void *#>)
+    //pthread_create_suspended_np(pthread_t *, const pthread_attr_t *, void *(*)(void *), void *);
     pthread_create( &threadId, NULL, fishTank, this ) ; // --new thread-->  to the fishTank
-    //!! I think there's a problem with passing `this` before the ctor has finished running
     
     // NSThread ref: http://developer.apple.com/library/ios/DOCUMENTATION/Cocoa/Reference/Foundation/Classes/NSThread_Class/Reference/Reference.html
     printf( "Thread %d created new thread at memory address %d\n", (int)pthread_self(), (int)threadId ) ;
@@ -125,8 +166,7 @@ public:
   
   // used for creating the main thread
   Thread( const pthread_t &iThreadId ) {
-    if( ![NSThread isMainThread] )
-    {
+    if( ![NSThread isMainThread] ) {
       puts( "ERROR: This Thread ctor intended for use by main thread only" ) ;
       return ;
     }
@@ -282,12 +322,8 @@ public:
   
   // You finished submitting jobs and want this object to be destroyed
   // by the thread that finishes the last job in the list (ie you are NOT
-  // adding to this list anymore)
-  void finishedSubmission()
-  {
-    Lock lockSA( &mutexStillAdding ) ;
-    stillAdding = 0 ;
-  }
+  // adding to this list anymore). Also starts the threadPool worker thread.
+  void finishedSubmission() ;
   
   // I tell you if this list is marked for still adding (undeletable) or not
   bool isStillAdding()
@@ -296,7 +332,7 @@ public:
     return stillAdding ;
   }
   
-  // Just runs all the jobs in the queue.  used when you want
+  // Just runs all the jobs in the queue ON THE CALLING THREAD.  used when you want
   // an entire workorder to be processed by one thread.
   // used mainly for jobs that must be run by ONLY the mainthread in a special queue,
   // OR can be used for functional decomposition style programming.
@@ -324,7 +360,11 @@ private:
   
   Thread* mainThread ;
   vector<Thread*> threads ;
-  
+
+public:
+  LockCounter numThreadsSwimming ;  // # threads that are currently swimming (not sleeping) in the fishTank.
+
+private:  
   Thread* threadPoolThread ; // This is the THREADPOOL'S THREAD.  It continually runs and suspends itself
   // when all jobs are done.  Calling any of the addJob functions 
   // wakes this thread up.
@@ -545,7 +585,9 @@ public:
       UNLOCKQUEUES ;
       
       //printf( "There are absolutely no jobs left to do.  You should sleep\n" ) ;
-      noJobs() ;
+      ///noJobs() ; // Actually cannot conclude there are noJobs here. The last
+      // thread that goes to sleep should say that.  If there is still a thread awake working,
+      // then __that thread isn't done its job yet__ which means not all jobs have been complete.
       return 0 ;
     }
     
@@ -601,12 +643,14 @@ public:
       return ;
     }
     
-    if( !hasJobs() )  return ;// no need to block if there are no jobs
+    if( !numThreadsSwimming.read() )  return ;// no need to block if there are no swimming fish
     
     if( doBusyWait )
-      while( hasJobs() ) ;  // busy wait
+      while( numThreadsSwimming.read() ) ;  // busy wait until all the workers go to sleep
+      // (that's how we know all the jobs have been done. all the workers will be sleeping)
     else
-      mainThread->sleep() ; // sleep until there are no more jobs
+      mainThread->sleep() ; // sleep until there are no more threads working on any jobs. noJobs() will be called
+      // as the last fish goes to sleep.
   }
   
   void mainThreadRunJobs()

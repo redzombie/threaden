@@ -29,6 +29,8 @@ void* fishTank( void* execData )
   // The Thread object is actually created on the main thread (in the beginning the main thread is the only one in existence to be
   // able to actually create the worker threads!)
   
+  ++threadPool->numThreadsSwimming ; // a fish is born. fishes++.
+  
   while( !thread->exiting ) {
 
     // Try and find a job.
@@ -42,10 +44,21 @@ void* fishTank( void* execData )
       delete job ;
     }
     else {
+      // NOJOBS.
+      
       ///printf( "Thread %d going to sleep with the fishes (in the fishtank)\n", thread->num ) ;
-      //printf( "Thread %d couldn't find a job, going to sleep\n", thread->num ) ;
+      if( ! --threadPool->numThreadsSwimming ) // this little fishy went to sleep.
+      {
+        // Ok.  There are NOJOBS since we couldn't pull a job from the queue (it was empty).
+        // If I am THE LAST FISH GOING TO SLEEP, I turn out all the lights etc (I call noJobs()).
+        // Calling noJobs() has the effect of waking the main thread if it was asleep.
+        // If there are NOJOBS NOW before you go to sleep
+        threadPool->noJobs() ;
+      }
+      
       thread->sleep() ; // If you couldn't find a job, sleep.  You will be awoken as soon as
       // a new job is added.  You might not GET the job, but you'll be awoken.
+      ++threadPool->numThreadsSwimming ; // as soon as the fishy awakes, he's swimming again.
     }
     
     // So if you got a job, you continue exeution and get another one.
@@ -54,6 +67,8 @@ void* fishTank( void* execData )
     
     // If you were awoken and you should exit, you WILL NOT repeat the loop (so you won't try to getNextJob again).
   }
+  
+  --threadPool->numThreadsSwimming ; // a fish dies. one less fish in the tank.
   
   // The thread is going to exit.  So delete the Thread object here.  It doesn't get deleted in ThreadPool.
   delete thread ;
@@ -67,7 +82,7 @@ void* fishTank( void* execData )
 // Hit this first when booting up a thread
 void* threadBoot( void* execData )
 {
-  EAGLContext *threadContext = (EAGLContext*) execData ;
+  EAGLContext *threadContext =  (__bridge EAGLContext*) execData ;
   
   if( threadContext )
   {
@@ -100,7 +115,14 @@ WorkOrder* WorkOrder::addJob( Callback* newJob ) {
   return this ;
 }
 
-
+void WorkOrder::finishedSubmission()
+{
+  Lock lockSA( &mutexStillAdding ) ;
+  stillAdding = 0 ;
+  
+  // It's sensible to put wakeAll here,
+  threadPool->wakeAll() ; // TELL EVERYBODY A WORKORDER HAS BEEN ADDED!
+}
 
 void testBackgroundWork()
 {

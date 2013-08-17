@@ -145,7 +145,7 @@
     // The main thread (me) must invoke this
     // here I wait until all other jobs are finished.
     // BUSY WAIT UNTIL ALL JOBS ARE DONE
-    threadPool->mainThreadBlockUntilAllJobsFinished( 0 ) ; // SYNCHRONIZE
+    threadPool->mainThreadBlockUntilAllJobsFinished( 1 ) ; // SYNCHRONIZE
     threadPool->mainThreadRunJobs() ; // basically rendering and buffer flip that should be done on the main thread
     // (could use EAGL Shared Groups, but I do it this way here)
   }
