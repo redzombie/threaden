@@ -102,16 +102,38 @@ int getNumberOfCores() ;
 // spin around.
 void* fishTank( void* execData ) ;
 
-// Hit this first when booting up a thread
-void* threadBoot( void* execData ) ;
-
 // A THREAD:  Something that runs code.
 struct Thread
 {
   // EAGL Shared Context:
   // http://gamedev.stackexchange.com/questions/53382/displaying-animations-during-loading-screens/53386#53386
-  // See http://developer.apple.com/library/ios/documentation/3DDrawing/Conceptual/OpenGLES_ProgrammingGuide/WorkingwithOpenGLESContexts/WorkingwithOpenGLESContexts.html#//apple_ref/doc/uid/TP40008793-CH2-SW5
-  EAGLContext *threadContext ;
+  
+  // An EAGL Sharegroup Manages OpenGL ES Objects for the Context:
+  // http://developer.apple.com/library/ios/documentation/3DDrawing/Conceptual/OpenGLES_ProgrammingGuide/WorkingwithOpenGLESContexts/WorkingwithOpenGLESContexts.html#//apple_ref/doc/uid/TP40008793-CH2-SW5
+  
+  // Concurrency and OpenGL ES:
+  // http://developer.apple.com/library/ios/documentation/3ddrawing/conceptual/opengles_programmingguide/ConcurrencyandOpenGLES/ConcurrencyandOpenGLES.html
+  
+  // Here I have an EAGLContext for the thread. If the separate thread wants to use OpenGL commands,
+  // it _can_, but under some restrictions.
+  // YOU COULD use a single context for the entire app, but you would have to LOCK access to OpenGL
+  // commands.
+  //   > "If for some reason you decide to set more than one thread to target the same context, 
+  //      then you must synchronize threads by placing a mutex around all OpenGL ES calls to the context."
+  // So we avoid doing that here.  We always make a 2nd context that shares the data of the 1st context.
+  // For the 2 contexts to share the data without clobbering each other, they must obey the following rules:
+  
+  // It is your application’s responsibility to manage state changes to OpenGL ES objects when the sharegroup is shared by multiple contexts.
+  // Here are the rules:
+  // 
+  // 1. Your application may access the object across multiple contexts simultaneously
+  //    __provided the object is not being modified__.
+  // 2. _While the object is being modified_ by commands sent to a context,
+  //    __the object must not be read or modified on any other context__.
+  // 3. After an object has been modified, all contexts must rebind the object to see the changes.
+  //    The contents of the object are undefined if a context references it before binding it.
+  EAGLContext *glContext ;
+  GLuint defaultFramebuffer, colorRenderbuffer ;
   
   static int NextThreadId ;
   
@@ -133,7 +155,7 @@ private:
     num = NextThreadId++ ;
     char b[255];  sprintf( b, "thread %d", num ) ;
     name = b ;
-
+    glContext = nil ;
     pthread_mutex_init( &suspendMutex, 0 ) ;
     pthread_cond_init( &resumeCondition, 0 ) ;
   }
@@ -160,11 +182,11 @@ public:
   Thread()
   {
     init() ;
-    threadContext = nil ;
     makeThread() ;
   }
   
-  // used for creating the main thread
+  // used for creating the object REPRESENTING the main thread
+  // (it doesn't make the thread it just makes a Thread object surrounding it)
   Thread( const pthread_t &iThreadId ) {
     if( ![NSThread isMainThread] ) {
       puts( "ERROR: This Thread ctor intended for use by main thread only" ) ;
@@ -184,13 +206,20 @@ public:
   }
 
   // thread WILL use opengl  
-  Thread( EAGLContext *mainContext )
+  Thread( EAGLContext *mainContext, GLuint iDefaultFramebuffer, GLuint iColorRenderbuffer )
   {
     init() ;
-    threadContext = [[EAGLContext alloc] initWithAPI:[mainContext API] sharegroup:[mainContext sharegroup]];
+    // The name gets overwritten to "OpenGL thread 2" or whatever
+    char b[255];  sprintf( b, "OpenGL thread %d", num ) ;
+    name = b ;
+    
+    // Make a glContext for this thread that shares resources with the mainContext.
+    glContext = [[EAGLContext alloc] initWithAPI:[mainContext API] sharegroup:[mainContext sharegroup]];
+    defaultFramebuffer = iDefaultFramebuffer ;
+    colorRenderbuffer = iColorRenderbuffer ;
     
     // Boot the thread with the eaglcontext.
-    pthread_create( &threadId, NULL, threadBoot, this ) ;  
+    pthread_create( &threadId, NULL, fishTank, this ) ;  
   }
   
   ~Thread()
@@ -301,8 +330,9 @@ public:
       pthread_mutex_unlock( &mutexJob ) ;
       return 0 ;
     }
+    
     Callback* j = jobs.front() ;
-    jobs.pop_front() ;
+    jobs.pop_front() ; // YOU TOOK IT
     
     pthread_mutex_unlock( &mutexJob ) ;
     
@@ -365,9 +395,9 @@ public:
   LockCounter numThreadsSwimming ;  // # threads that are currently swimming (not sleeping) in the fishTank.
 
 private:  
-  Thread* threadPoolThread ; // This is the THREADPOOL'S THREAD.  It continually runs and suspends itself
+  //Thread* threadPoolThread ; // This is the THREADPOOL'S THREAD.  It continually runs and suspends itself
   // when all jobs are done.  Calling any of the addJob functions 
-  // wakes this thread up.
+  // wakes this thread up.  (actually didn't need it)
   
   // so you don't r/w the workOrders deque at the same time (mainthread writes, worker threads read)
   pthread_mutex_t mutexWorkOrders ;
@@ -419,6 +449,8 @@ public:
     pthread_mutex_destroy( &mutexWorkOrders ) ;
   }
   
+  inline int getNumCores() const { return nCores ; }
+  
 private:
   // Reads # cores, and ensures app is MT
   void init()
@@ -454,8 +486,30 @@ public:
     printf( "ThreadPool: Creating %d threads\n", numThreads ) ;
     for( int i = 0 ; i < numThreads ; i++ )
       threads.push_back( new Thread() ) ; // These will sleep as soon as they boot as they will find no jobs to do
+  }
+  
+  // You want to create worker threads with their own OpenGL context.
+  void createWorkerThreads( int numThreads, EAGLContext* glContext, GLuint iDefaultFramebuffer, GLuint iColorRenderbuffer ) {
+    mainThread->glContext = glContext ;
+    printf( "ThreadPool: Creating %d threads with their own OpenGL contexts\n", numThreads ) ;
+    for( int i = 0 ; i < numThreads ; i++ )
+      threads.push_back( new Thread( glContext, iDefaultFramebuffer, iColorRenderbuffer ) ) ;
+  }
+
+  // A thread asks to retrieve a pointer to itself
+  Thread* getMe() {
+    pthread_t selfId = pthread_self() ;
     
-    // Finally, create the tpt, which is the
+    // ru main?
+    if( mainThread->threadId == selfId )
+      return mainThread ;
+    
+    for( Thread* t : threads )
+      if( t->threadId == selfId )
+        return t ;
+        
+    puts( "ERROR: I couldn't find your Thread object." ) ;
+    return 0 ;
   }
 
   // This adds a job to the "current workorder" in other words THE BACK DEQUE.
@@ -643,7 +697,10 @@ public:
       return ;
     }
     
-    if( !numThreadsSwimming.read() )  return ;// no need to block if there are no swimming fish
+    if( !numThreadsSwimming.read() ) {
+      //puts( "mainThread: Nothing running, no need to block" ) ;
+      return ;// no need to block if there are no swimming fish
+    }
     
     if( doBusyWait )
       while( numThreadsSwimming.read() ) ;  // busy wait until all the workers go to sleep

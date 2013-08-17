@@ -53,18 +53,6 @@
 			displayLinkSupported = TRUE;
     
     
-     
-    // Now, start the threadpool
-    // start by initializing the threadpool
-    threadPool = new ThreadPool() ;
-    threadPool->createWorkerThreads( 1 ) ;
-    
-    // A threadpool can be used for background work that
-    // runs independently of rendering.  Here we can test that.
-    //testBackgroundWork() ; // launches a bunch of jobs that take forever to do,
-    // but they get run on a background thread and the renderer is allowed to continue drawing independently.
-    
-    
   }
 	
   return self;
@@ -79,6 +67,23 @@
 - (void) layoutSubviews
 {
 	[renderer resizeFromLayer:(CAEAGLLayer*)self.layer];
+  
+  // had to delay thread creation until after the context is fully setu
+  static bool first=1;
+  if( first ){
+  
+    // We make the threadpool here since we need the OpenGL context handle
+    // Now, start the threadpool
+    threadPool = new ThreadPool() ;
+    threadPool->createWorkerThreads( 1, renderer->context, renderer->defaultFramebuffer, renderer->colorRenderbuffer ) ;
+
+    // A threadpool can be used for background work that
+    // runs independently of rendering.  Here we can test that.
+    //testBackgroundWork() ; // launches a bunch of jobs that take forever to do,
+    // but they get run on a background thread and the renderer is allowed to continue drawing independently.
+
+    first=0;
+  }
   [self drawView:nil];
 }
 

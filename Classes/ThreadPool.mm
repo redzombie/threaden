@@ -1,4 +1,5 @@
 #import "ThreadPool.h"
+#import "ES1Renderer.h"
 
 ThreadPool *threadPool = 0 ;
 
@@ -28,6 +29,18 @@ void* fishTank( void* execData )
   Thread *thread = (Thread*)execData ;  // I pick up the thread object THAT SPAWNED this execution thread.
   // The Thread object is actually created on the main thread (in the beginning the main thread is the only one in existence to be
   // able to actually create the worker threads!)
+  
+  // Bind my context to me
+  if( thread->glContext != nil )
+  {
+    if( ![EAGLContext setCurrentContext:thread->glContext] )
+      puts( "ERROR: Worker thread could not setCurrentContext." ) ;
+      
+    //glBindFramebufferOES( GL_FRAMEBUFFER_OES, thread->defaultFramebuffer ) ;
+		//glBindRenderbufferOES( GL_RENDERBUFFER_OES, thread->colorRenderbuffer ) ;
+		//glFramebufferRenderbufferOES( GL_FRAMEBUFFER_OES, GL_COLOR_ATTACHMENT0_OES, GL_RENDERBUFFER_OES, thread->colorRenderbuffer ) ;
+    
+  }
   
   ++threadPool->numThreadsSwimming ; // a fish is born. fishes++.
   
@@ -79,24 +92,6 @@ void* fishTank( void* execData )
   return 0 ;
 }
 
-// Hit this first when booting up a thread
-void* threadBoot( void* execData )
-{
-  EAGLContext *threadContext =  (__bridge EAGLContext*) execData ;
-  
-  if( threadContext )
-  {
-    if( ![EAGLContext setCurrentContext:threadContext] )
-    {
-      puts( "ERROR: I could not setCurrentContext." ) ;
-      return 0 ;
-    }
-  }
-  
-  // Now we enter the main loop
-  return fishTank( execData ) ;
-}
-
 WorkOrder* WorkOrder::addJob( Callback* newJob ) {
   
   if( !isStillAdding() ) {
@@ -121,7 +116,7 @@ void WorkOrder::finishedSubmission()
   stillAdding = 0 ;
   
   // It's sensible to put wakeAll here,
-  threadPool->wakeAll() ; // TELL EVERYBODY A WORKORDER HAS BEEN ADDED!
+  //threadPool->wakeAll() ; // TELL EVERYBODY A WORKORDER HAS BEEN ADDED!
 }
 
 void testBackgroundWork()

@@ -40,6 +40,7 @@
 		9F3A717117BBEF3800B2EBD2 /* Callback.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Callback.h; sourceTree = "<group>"; };
 		9F3A717417BC1A4D00B2EBD2 /* ThreadPool.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ThreadPool.mm; sourceTree = "<group>"; };
 		9F3A717617BC1BFA00B2EBD2 /* thread.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; name = thread.png; path = Images/thread.png; sourceTree = "<group>"; };
+		9FF1415417BFE72000B97129 /* Vectorf.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = Vectorf.h; sourceTree = "<group>"; };
 		AF1AED32101E699D00EFB8CB /* ES1Renderer.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = ES1Renderer.h; sourceTree = "<group>"; };
 		AF1AED33101E699D00EFB8CB /* ES1Renderer.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = ES1Renderer.mm; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -65,6 +66,7 @@
 				9F3A717117BBEF3800B2EBD2 /* Callback.h */,
 				9F3A717017BBED6D00B2EBD2 /* ThreadPool.h */,
 				9F3A717417BC1A4D00B2EBD2 /* ThreadPool.mm */,
+				9FF1415417BFE72000B97129 /* Vectorf.h */,
 				AF1AED32101E699D00EFB8CB /* ES1Renderer.h */,
 				AF1AED33101E699D00EFB8CB /* ES1Renderer.mm */,
 				28FD14FC0DC6FC130079059D /* EAGLView.h */,
