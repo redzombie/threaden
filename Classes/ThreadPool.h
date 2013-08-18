@@ -339,21 +339,35 @@ public:
     return j ;
   } //lock released as soon as you get out
   
-  WorkOrder* addJob( Callback* newJob ) ;
-  
-  // Adds the job without waking anybody up
-  WorkOrder* addJobQuietly( Callback* newJob )
+  WorkOrder* addJob( Callback* newJob )
   {
+    if( !isStillAdding() ) {
+      puts( "ERROR: You promised not to add any more jobs to this work order! I'm not doing this job." ) ;
+      delete newJob ;
+      return this ;
+    }
+    
     pthread_mutex_lock( &mutexJob ) ;
     jobs.push_back( newJob ) ;
     pthread_mutex_unlock( &mutexJob ) ;
+
+    // It's kinda inefficient to call this EVERY TIME a job is added.
+    //////threadPool->wakeAll() ; // TELL EVERYBODY A JOB HAS BEEN ADDED!
+    
     return this ;
   }
   
   // You finished submitting jobs and want this object to be destroyed
   // by the thread that finishes the last job in the list (ie you are NOT
   // adding to this list anymore). Also starts the threadPool worker thread.
-  void finishedSubmission() ;
+  void finishedSubmission() 
+  {
+    Lock lockSA( &mutexStillAdding ) ;
+    stillAdding = 0 ;
+  
+    // It's sensible to put wakeAll here, but I put it in startWorkOrder instead.
+    //threadPool->wakeAll() ; // TELL EVERYBODY A WORKORDER HAS BEEN ADDED!
+  }
   
   // I tell you if this list is marked for still adding (undeletable) or not
   bool isStillAdding()
@@ -512,6 +526,7 @@ public:
     return 0 ;
   }
 
+#if 0
   // This adds a job to the "current workorder" in other words THE BACK DEQUE.
   WorkOrder* createNewWorkOrder( const string& name ) {
     WorkOrder *wo = new WorkOrder( name ) ;
@@ -568,17 +583,20 @@ public:
     return wo ;
   }//lock release
   
-  // Add an entire workorder to the q
-  WorkOrder* addWorkOrder( WorkOrder* wo ) {
-    //wo->finishedSubmission() ; // I mark it as finished submission now, because we're going to start working on it.
-    // You can't add tasks once we start working on the order. WELL I DON'T ENFORCE THIS. If you want to leave a submitted
-    // job as stillAdding, so be it.  I won't delete it, but you're responsible for your list getting crowded then.
+  // Add an entire workorder to the q, but it doesn't mark it finished
+  // or try to get it started.
+  WorkOrder* addWorkOrderWithoutStarting( WorkOrder* wo ) {
     LOCKQUEUES ;
     workOrders.push_back( wo ) ;
     UNLOCKQUEUES ;
     return wo ;
   }
-  
+#endif
+
+  // Add an entire workorder to the q, mark it as `finishedSubmission` and
+  // wake up any sleeping threads, so that they can begin working on it.
+  WorkOrder* startWorkOrder( WorkOrder* wo ) ;
+    
   //
   void printAll()
   {
@@ -598,18 +616,6 @@ public:
         t->wakeup() ;
   }
   
-  
-  
-  // You call all workers to go to sleep when there is absolutely no work left in the threadpool
-  // This doesn't work, sleep must be called from the thread that is going to sleep.
-  // Put another way, only you can make yourself fall asleep. No one can magically
-  // put you to sleep without you doing it yourself.
-  // void sleepAll() {
-  //   for( Thread* t : threads )
-  //     if( !t->suspended )
-  //       t->sleep() ;
-  // }
-
   // DOESN'T count the jobs for the main thread.
   // can be used to busy-wait the renderer until all worker threads
   // are done.
@@ -674,7 +680,7 @@ public:
   }
   
   WorkOrder* addJobForMainThread( Callback* job ) {
-    return workOrderForMainThread->addJobQuietly( job ) ;
+    return workOrderForMainThread->addJob( job ) ;
   }
   
   // A thread wants to continually run jobs as if it were in the fishTank,
@@ -708,6 +714,12 @@ public:
     else
       mainThread->sleep() ; // sleep until there are no more threads working on any jobs. noJobs() will be called
       // as the last fish goes to sleep.
+  }
+  
+  void sequencePoint( bool doBusyWait )
+  {
+    runJobs() ;
+    mainThreadBlockUntilAllJobsFinished( doBusyWait ) ;
   }
   
   void mainThreadRunJobs()

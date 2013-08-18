@@ -92,39 +92,27 @@ void* fishTank( void* execData )
   return 0 ;
 }
 
-WorkOrder* WorkOrder::addJob( Callback* newJob ) {
+// Add an entire workorder to the q
+WorkOrder* ThreadPool::startWorkOrder( WorkOrder* wo ) {
+  wo->finishedSubmission() ; // I mark it as finished submission now, because we're going to start working on it.
+  // You can't add tasks once we start working on the order.
   
-  if( !isStillAdding() ) {
-    puts( "ERROR: You promised not to add any more jobs to this work order! I'm not doing this job." ) ;
-    delete newJob ;
-    return this ;
-  }
+  LOCKQUEUES ;
+  workOrders.push_back( wo ) ;
+  UNLOCKQUEUES ;
   
-  pthread_mutex_lock( &mutexJob ) ;
-  jobs.push_back( newJob ) ;
-  pthread_mutex_unlock( &mutexJob ) ;
-
-  // It's kinda inefficient to call this EVERY TIME a job is added.
-  //////threadPool->wakeAll() ; // TELL EVERYBODY A JOB HAS BEEN ADDED!
-  
-  return this ;
+  threadPool->wakeAll() ; // TELL EVERYBODY A WORKORDER HAS BEEN ADDED!
+  return wo ;
 }
 
-void WorkOrder::finishedSubmission()
-{
-  Lock lockSA( &mutexStillAdding ) ;
-  stillAdding = 0 ;
-  
-  // It's sensible to put wakeAll here,
-  //threadPool->wakeAll() ; // TELL EVERYBODY A WORKORDER HAS BEEN ADDED!
-}
+
+
 
 void testBackgroundWork()
 {
-  // Add a few workorders.  ORDER OF CREATION MATTERS, here
-  // the AI workorder WILL RUN BEFORE the graphics workorder.
-  WorkOrder *aiWo = threadPool->createNewWorkOrder( "AI" ) ;
-  WorkOrder *graphicsWo = threadPool->createNewWorkOrder( "graphics" ) ;
+  // Add a few workorders.
+  WorkOrder *aiWo = new WorkOrder( "AI" ) ;
+  WorkOrder *graphicsWo = new WorkOrder( "graphics" ) ;
   
   // Just create a big bunch of like fake jobs
   // All 100 of the jobs added to each WorkOrder ARE parallelizable,
@@ -147,9 +135,12 @@ void testBackgroundWork()
     } ) ) ;
   }
 
-  graphicsWo->addJob( new Callback1<int>( []( int p ){
-    printf( "DRAW %d! |_|", p ) ;
-  }, 5 ) ) ; // passes 5 to p when called.
+  // ORDER OF ADDITION MATTERS, here
+  // the AI workorder WILL RUN IN TOTALITY
+  // (with its individual Jobs allowed to be executed in parallel)
+  // BEFORE the graphics workorder ever starts
+  threadPool->startWorkOrder( aiWo ) ;
+  threadPool->startWorkOrder( graphicsWo ) ;
   
   threadPool->printAll() ;
 }

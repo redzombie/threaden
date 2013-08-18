@@ -68,14 +68,15 @@
 {
 	[renderer resizeFromLayer:(CAEAGLLayer*)self.layer];
   
-  // had to delay thread creation until after the context is fully setu
+  // had to delay thread creation until after the glContext is fully setup
   static bool first=1;
   if( first ){
   
     // We make the threadpool here since we need the OpenGL context handle
     // Now, start the threadpool
     threadPool = new ThreadPool() ;
-    threadPool->createWorkerThreads( 1, renderer->context, renderer->defaultFramebuffer, renderer->colorRenderbuffer ) ;
+    //threadPool->createWorkerThreads( 1, renderer->context, renderer->defaultFramebuffer, renderer->colorRenderbuffer ) ;
+    threadPool->createWorkerThreads( 1 ) ; // Not accessing the glcontext from the worker threads
 
     // A threadpool can be used for background work that
     // runs independently of rendering.  Here we can test that.

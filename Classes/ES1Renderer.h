@@ -45,8 +45,7 @@ extern vector<VertexPNC> pncVerts ;
 	// The OpenGL names for the framebuffer and renderbuffer used to render to this view
 	GLuint defaultFramebuffer, colorRenderbuffer;
   
-  bool threadingOn ;
-  Matrix3f rot ;
+  // For parallelProcessAndDraw
   vector<VertexPC> *process, *draw ;
   
 }
