@@ -158,7 +158,7 @@ void processVertices( vector<VertexPC>* dst, vector<VertexPC>* src, int startVer
   // Do everything on the main thread. So only deal with A.
   
   // Process all vertices
-  processVertices( &pcVertsA, &pcVertsA, 0, pcVertsA.size() ) ;
+  processVertices( &pcVertsA, &pcVertsA, 0, (int)pcVertsA.size() ) ;
   
   // Draw.
   [self prerender:context];
@@ -181,12 +181,12 @@ void processVertices( vector<VertexPC>* dst, vector<VertexPC>* src, int startVer
   WorkOrder *wo = new WorkOrder( "vertex transforms" ) ;
   
   // Cut into jobs of size.  Every vertex must be processed.
-  int JOBSIZE = pcVertsA.size() / 4 ;
+  int JOBSIZE = (int)pcVertsA.size() / 4 ;
   
   for( int i = 0 ; i < pcVertsA.size() ; i+=JOBSIZE )
   {
     int startVert=i, endVert=i+JOBSIZE ;
-    if( endVert > pcVertsA.size() )  endVert=pcVertsA.size() ;  // If the end ends up OOB, clamp it.
+    if( endVert > (int)pcVertsA.size() )  endVert=(int)pcVertsA.size() ;  // If the end ends up OOB, clamp it.
     
     // Add a callback object to run processVertices from startVert to endVert.
     wo->addJob( new Callback4<vector<VertexPC>*, vector<VertexPC>*, int, int>
@@ -247,14 +247,14 @@ void processVertices( vector<VertexPC>* dst, vector<VertexPC>* src, int startVer
   
   // PROCESS //
   // Cut into jobs of size.  Every vertex must be processed.
-  int JOBSIZE = draw->size() / 4 ;
+  int JOBSIZE = (int)draw->size() / 4 ;
   
   for( int i = 0 ; i < draw->size() ; i+=JOBSIZE )
   {
     int startVert=i, endVert=i+JOBSIZE ;
     
     // If the end ends up OOB, clamp it.
-    if( endVert > draw->size() )  endVert=draw->size() ;
+    if( endVert > (int)draw->size() )  endVert=(int)draw->size() ;
     
     // next state (`process`) is from the current state (`draw`)
     // This is different from usual processing used in the other examples.
@@ -291,11 +291,11 @@ void processVertices( vector<VertexPC>* dst, vector<VertexPC>* src, int startVer
   [self prerender:context] ;
   
   WorkOrder *wo = new WorkOrder( "vertex transforms" ) ;
-  int JOBSIZE = pcVertsA.size() / 4 ;
+  int JOBSIZE = (int)pcVertsA.size() / 4 ;
   for( int i = 0 ; i < pcVertsA.size() ; i+=JOBSIZE )
   {
     int startVert=i, endVert=i+JOBSIZE ;
-    if( endVert > pcVertsA.size() )  endVert=pcVertsA.size() ;
+    if( endVert > (int)pcVertsA.size() )  endVert=(int)pcVertsA.size() ;
     
     wo->addJob( new Callback4<vector<VertexPC>*, vector<VertexPC>*, int, int>
       ( processVertices, &pcVertsA, &pcVertsA, startVert, endVert ) ) ;
@@ -317,7 +317,7 @@ void processVertices( vector<VertexPC>* dst, vector<VertexPC>* src, int startVer
   for( int i = 0 ; i < pcVertsA.size() ; i+=JOBSIZE ) // WRONG
   {
     int startVert=i, numVerts=JOBSIZE ;
-    if( i+JOBSIZE > pcVertsA.size() )  JOBSIZE=pcVertsA.size()-i ;  // last job may be smaller
+    if( i+JOBSIZE > (int)pcVertsA.size() )  JOBSIZE=(int)pcVertsA.size()-i ;  // last job may be smaller
     wo->addJob( new Callback0( [self,startVert,numVerts](){ 
       [self setupTransformations];
       drawPC( pcVertsA, startVert, numVerts, GL_LINES ) ; // WRONG // WRONG // WRONG // WRONG

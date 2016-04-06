@@ -170,7 +170,7 @@ private:
     pthread_create( &threadId, NULL, fishTank, this ) ; // --new thread-->  to the fishTank
     
     // NSThread ref: http://developer.apple.com/library/ios/DOCUMENTATION/Cocoa/Reference/Foundation/Classes/NSThread_Class/Reference/Reference.html
-    printf( "Thread %d created new thread at memory address %d\n", (int)pthread_self(), (int)threadId ) ;
+    printf( "Thread %ld created new thread at memory address %ld\n", (long)pthread_self(), (long)threadId ) ;
     //   |
     //   | calling thread
     //   v
@@ -396,6 +396,11 @@ public:
   }
 } ;
 
+// Used for making app multithreaded when it starts non-multi-threaded
+@interface EmptyObject : NSObject
+- ( void )empty;
+@end
+ 
 // ThreadPool:  Manages all the threads, dispatches jobs,
 struct ThreadPool
 {
@@ -484,10 +489,14 @@ private:
     // IF THE APP IS NOT ALREADY CONSIDERED MULTITHREADED, IT'S EXTREMELY IMPORTANT YOU MAKE IT SO
     // SINCE WE'RE USING POSIX THREADS HERE
     // See http://developer.apple.com/library/ios/DOCUMENTATION/Cocoa/Reference/Foundation/Classes/NSThread_Class/Reference/Reference.html#//apple_ref/occ/clm/NSThread/isMultiThreaded
-    if( ![NSThread isMultiThreaded] ) 
+    if( ![NSThread isMultiThreaded] )
     {
       puts( "App not already mt, making mt" ) ;
-      [NSThread detachNewThreadSelector:nil toTarget:nil withObject:nil] ;
+      //pthread_t threadId;
+      //pthread_create( &threadId, NULL, empty, this );
+      EmptyObject* eo = [[EmptyObject alloc] init];
+      //[NSThread detachNewThreadSelector:nil toTarget:nil withObject:nil] ;
+      [NSThread detachNewThreadSelector:@selector(empty) toTarget:eo withObject:eo];
     } 
     if( ![NSThread isMultiThreaded] ) 
       puts( "ERROR: App STILL not mt" ) ;

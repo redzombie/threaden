@@ -92,6 +92,10 @@ void* fishTank( void* execData )
   return 0 ;
 }
 
+@implementation EmptyObject
+- ( void )empty{}
+@end
+
 // Add an entire workorder to the q
 WorkOrder* ThreadPool::startWorkOrder( WorkOrder* wo ) {
   wo->finishedSubmission() ; // I mark it as finished submission now, because we're going to start working on it.
